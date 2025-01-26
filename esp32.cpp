@@ -11,7 +11,7 @@ Adafruit_BMP280 bmp;
 const char* ssid = "";
 const char* password = "";
 
-const char* serverUrl = "/odbierz.php";
+const char* serverUrl = "/receive.php";
 
 
 void setup() {
