@@ -4,12 +4,14 @@
 
 #include <WiFi.h>
 
+#include <HTTPClient.h>
+
 Adafruit_BMP280 bmp;
 
 const char* ssid = "";
 const char* password = "";
 
-
+const char* serverUrl = "/odbierz.php";
 
 
 void setup() {
@@ -24,14 +26,34 @@ void setup() {
 
 void loop() {
   
-  float temperature = bmp.readTemperature();  // Temperatura w °C
+  //wyswietlenie temperatury
+  float temperature = bmp.readTemperature();  
  
   Serial.print("Temperatura: ");
   Serial.print(temperature);
   Serial.println(" °C");
   
 
-  delay(2000); 
+
+
+// Wysłanie danych do serwera
+  HTTPClient http;
+  http.begin(serverUrl);
+  http.addHeader("Content-Type", "application/json");
+
+  String jsonData = "{\"temperature\": " + String(temperature) + "}";
+  int httpResponseCode = http.POST(jsonData);
+
+  if (httpResponseCode > 0) {
+    Serial.println("Dane wysłane, odpowiedź: " + String(httpResponseCode));
+  } else {
+    Serial.println("Błąd wysyłania danych: " + String(httpResponseCode));
+  }
+
+  http.end();
+
+
+  delay(5000); 
   
   }
 
