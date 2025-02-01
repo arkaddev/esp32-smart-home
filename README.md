@@ -25,3 +25,6 @@ The program helps in car management.
 - connection with wifi
 - connection with server
 - sending data with current temperature to server
+
+### v0.2
+- esp32 connection with oled
