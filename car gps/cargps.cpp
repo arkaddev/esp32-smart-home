@@ -3,53 +3,34 @@
 #include <SPI.h>
 #include <SD.h>
 
-// Obiekty
 TinyGPSPlus gps;
 HardwareSerial mySerial(1);
 File gpxFile;
 
-// Konfiguracja pinów
-#define SD_CS 5           // Chip Select (CS) dla karty SD
-#define BUTTON_PIN 4      // Przycisk zakończenia trasy
+#define SD_CS 5
+#define BUTTON_PIN 4
 
+bool isLogging = false;
 bool gpxClosed = false;
+bool buttonState = HIGH;
+bool lastButtonState = HIGH;
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
+
+String filename = "";
 
 void setup() {
   Serial.begin(115200);
-  mySerial.begin(9600, SERIAL_8N1, 16, 17); // GPS RX=16, TX=17
-  pinMode(BUTTON_PIN, INPUT_PULLUP);       // Przycisk z pull-up
+  mySerial.begin(9600, SERIAL_8N1, 16, 17);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  // Inicjalizacja SPI z własnymi pinami dla SD (SCK=22, MISO=19, MOSI=23, CS=5)
   SPI.begin(15, 19, 23, SD_CS);
 
-  // Inicjalizacja SD
   if (!SD.begin(SD_CS)) {
     Serial.println("❌ Błąd: nie można zainicjalizować karty SD.");
     while (true);
   }
   Serial.println("✅ Karta SD OK.");
-
-  // Sprawdzamy, czy plik o nazwie "track.gpx" już istnieje, jeśli tak, tworzmy nowy plik
-  String filename = "/track.gpx";
-  int fileIndex = 1;
-  while (SD.exists(filename)) {
-    filename = "/track" + String(fileIndex) + ".gpx";
-    fileIndex++;
-  }
-
-  // Tworzymy nowy plik GPX
-  gpxFile = SD.open(filename, FILE_WRITE);
-  if (gpxFile) {
-    gpxFile.println("<gpx version=\"1.1\" creator=\"ESP32-GPS\">");
-    gpxFile.println("  <trk>");
-    gpxFile.println("    <name>Trasa ESP32</name>");
-    gpxFile.println("    <trkseg>");
-    gpxFile.flush();
-    Serial.print("📍 Rozpoczęto zapis trasy w pliku: ");
-    Serial.println(filename);
-  } else {
-    Serial.println("❌ Błąd otwarcia pliku GPX.");
-  }
 }
 
 void loop() {
@@ -57,7 +38,31 @@ void loop() {
     gps.encode(mySerial.read());
   }
 
-  if (gps.location.isUpdated() && !gpxClosed) {
+  int reading = digitalRead(BUTTON_PIN);
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (reading != buttonState) {
+      buttonState = reading;
+      if (buttonState == LOW) {
+        // Wciśnięto przycisk
+        if (!isLogging) {
+          startGpx();
+          isLogging = true;
+        } else if (!gpxClosed) {
+          endGpx();
+          isLogging = false;
+          gpxClosed = true;
+        }
+      }
+    }
+  }
+
+  lastButtonState = reading;
+
+  if (gps.location.isUpdated() && isLogging) {
     if (gpxFile) {
       gpxFile.print("      <trkpt lat=\"");
       gpxFile.print(gps.location.lat(), 6);
@@ -83,17 +88,32 @@ void loop() {
     Serial.println(gps.location.lng(), 6);
   }
 
-  // Przycisk – zakończenie zapisu
-  if (!digitalRead(BUTTON_PIN) && !gpxClosed) {
-    Serial.println("🛑 Przycisk naciśnięty – kończę zapis GPX...");
-    endGpx();
-    gpxClosed = true;
-  }
-
   delay(1000);
 }
 
-// Zapisuje znacznik czasu w formacie ISO 8601
+void startGpx() {
+  filename = "/track.gpx";
+  int fileIndex = 1;
+  while (SD.exists(filename)) {
+    filename = "/track" + String(fileIndex) + ".gpx";
+    fileIndex++;
+  }
+
+  gpxFile = SD.open(filename, FILE_WRITE);
+  if (gpxFile) {
+    gpxFile.println("<gpx version=\"1.1\" creator=\"ESP32-GPS\">");
+    gpxFile.println("  <trk>");
+    gpxFile.println("    <name>Trasa ESP32</name>");
+    gpxFile.println("    <trkseg>");
+    gpxFile.flush();
+    Serial.print("▶️ Rozpoczęto zapis do: ");
+    Serial.println(filename);
+    gpxClosed = false;
+  } else {
+    Serial.println("❌ Błąd otwarcia pliku GPX.");
+  }
+}
+
 void writeTime(File &file) {
   char buffer[30];
   if (gps.date.isValid() && gps.time.isValid()) {
@@ -106,13 +126,12 @@ void writeTime(File &file) {
   }
 }
 
-// Zamyka plik GPX
 void endGpx() {
   if (gpxFile) {
     gpxFile.println("    </trkseg>");
     gpxFile.println("  </trk>");
     gpxFile.println("</gpx>");
     gpxFile.close();
-    Serial.println("📁 Zakończono i zamknięto plik GPX.");
+    Serial.println("🛑 Zapis zakończony i plik zamknięty.");
   }
 }
