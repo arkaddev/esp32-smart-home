@@ -2,35 +2,60 @@
 #include <HardwareSerial.h>
 #include <SPI.h>
 #include <SD.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
+// GPS i Serial
 TinyGPSPlus gps;
 HardwareSerial mySerial(1);
-File gpxFile;
 
+// SD i przycisk
 #define SD_CS 5
 #define BUTTON_PIN 4
+File gpxFile;
 
+// OLED
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1 // jeśli masz pin RESET podłączony, podaj numer GPIO
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Zmienne stanu
 bool isLogging = false;
 bool gpxClosed = false;
 bool buttonState = HIGH;
 bool lastButtonState = HIGH;
 unsigned long lastDebounceTime = 0;
 const unsigned long debounceDelay = 50;
-
 String filename = "";
 
 void setup() {
   Serial.begin(115200);
-  mySerial.begin(9600, SERIAL_8N1, 16, 17);
+  mySerial.begin(9600, SERIAL_8N1, 16, 17); // RX=16, TX=17
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
+  // SD karta
   SPI.begin(15, 19, 23, SD_CS);
-
   if (!SD.begin(SD_CS)) {
     Serial.println("❌ Błąd: nie można zainicjalizować karty SD.");
     while (true);
   }
   Serial.println("✅ Karta SD OK.");
+
+  // OLED
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("❌ Błąd: OLED nie działa.");
+    while (true);
+  }
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  //display.println("✅ OLED gotowy.");
+  display.println("OLED gotowy.");
+  display.display();
+  delay(1000);
 }
 
 void loop() {
@@ -47,7 +72,6 @@ void loop() {
     if (reading != buttonState) {
       buttonState = reading;
       if (buttonState == LOW) {
-        // Wciśnięto przycisk
         if (!isLogging) {
           startGpx();
           isLogging = true;
@@ -88,6 +112,7 @@ void loop() {
     Serial.println(gps.location.lng(), 6);
   }
 
+  updateDisplayStatus(); // aktualizacja OLED
   delay(1000);
 }
 
@@ -134,4 +159,24 @@ void endGpx() {
     gpxFile.close();
     Serial.println("🛑 Zapis zakończony i plik zamknięty.");
   }
+}
+
+// OLED - aktualizacja statusu
+void updateDisplayStatus() {
+  display.clearDisplay();
+  display.setCursor(0, 0);
+
+  if (isLogging) {
+    //display.println("🔴 Zapis trasy...");
+    display.println("Zapis trasy...");
+    display.println(filename);
+  } else if (gpxClosed) {
+    //display.println("✅ Plik zamkniety");
+    display.println("Plik zamkniety");
+  } else {
+    //display.println("🟢 Gotowy do zapisu");
+    display.println("Gotowy do zapisu");
+  }
+
+  display.display();
 }
