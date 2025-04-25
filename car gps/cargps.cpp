@@ -30,6 +30,8 @@ unsigned long lastDebounceTime = 0;
 const unsigned long debounceDelay = 50;
 String filename = "";
 
+bool gpsSignal = false;
+
 void setup() {
   Serial.begin(115200);
   mySerial.begin(9600, SERIAL_8N1, 16, 17); // RX=16, TX=17
@@ -52,7 +54,7 @@ void setup() {
   display.setTextSize(2);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
-  display.println("OLED gotowy.");
+  display.println("Witaj.");
   display.display();
   delay(1000);
 }
@@ -61,6 +63,16 @@ void loop() {
   while (mySerial.available() > 0) {
     gps.encode(mySerial.read());
   }
+
+   // Sprawdzamy, czy GPS otrzymał nową lokalizację
+  if (gps.location.isUpdated()) {
+    gpsSignal = true;  // Sygnał GPS dostępny
+  } else {
+    gpsSignal = false; // Brak sygnału GPS
+  }
+
+
+
 
   int reading = digitalRead(BUTTON_PIN);
   if (reading != lastButtonState) {
@@ -71,7 +83,7 @@ void loop() {
     if (reading != buttonState) {
       buttonState = reading;
       if (buttonState == LOW) {
-        if (!isLogging) {
+        if (!isLogging && gpsSignal) {
           startGpx();
           isLogging = true;
         } else if (!gpxClosed) {
@@ -166,16 +178,29 @@ void endGpx() {
 }
 
 void updateDisplayStatus() {
+Serial.print(".");
+
   display.clearDisplay();
   display.setCursor(0, 0);
 
-  if (isLogging) {
+ if (!isLogging && gpsSignal) {
+    display.println("Gotowy do zapisu");
+  } else if (!isLogging && !gpsSignal) {
+    display.println("Brak sygnału GPS");
+  }
+
+ else if (isLogging && gpsSignal) {
     display.println("Zapis trasy...");
     display.println(filename);
-  } else if (gpxClosed) {
+  }
+    
+else if (isLogging && !gpsSignal) {
+    display.println("Czekam na sygnal GPS");
+    
+  }
+
+  else if (gpxClosed) {
     display.println("Plik zamkniety");
-  } else {
-    display.println("Gotowy do zapisu");
   }
 
   display.display();
