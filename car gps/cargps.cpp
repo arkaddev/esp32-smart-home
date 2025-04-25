@@ -18,7 +18,7 @@ File gpxFile;
 // OLED
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-#define OLED_RESET -1 // jeśli masz pin RESET podłączony, podaj numer GPIO
+#define OLED_RESET -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Zmienne stanu
@@ -52,7 +52,6 @@ void setup() {
   display.setTextSize(2);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
-  //display.println("✅ OLED gotowy.");
   display.println("OLED gotowy.");
   display.display();
   delay(1000);
@@ -101,6 +100,11 @@ void loop() {
       gpxFile.print("        <time>");
       writeTime(gpxFile);
       gpxFile.println("</time>");
+
+      // 🔽 DODANE: prędkość
+      gpxFile.print("        <speed>");
+      gpxFile.print(gps.speed.kmph(), 1);
+      gpxFile.println("</speed>");
 
       gpxFile.println("      </trkpt>");
       gpxFile.flush();
@@ -161,20 +165,16 @@ void endGpx() {
   }
 }
 
-// OLED - aktualizacja statusu
 void updateDisplayStatus() {
   display.clearDisplay();
   display.setCursor(0, 0);
 
   if (isLogging) {
-    //display.println("🔴 Zapis trasy...");
     display.println("Zapis trasy...");
     display.println(filename);
   } else if (gpxClosed) {
-    //display.println("✅ Plik zamkniety");
     display.println("Plik zamkniety");
   } else {
-    //display.println("🟢 Gotowy do zapisu");
     display.println("Gotowy do zapisu");
   }
 
